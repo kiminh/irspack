@@ -1,10 +1,12 @@
 #include <Eigen/Core>
 #include <Eigen/Sparse>
+#include <cstddef>
 #include <future>
 #include <iostream>
 #include <map>
 #include <mutex>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -24,6 +26,8 @@ struct Metrics {
     item_cnt.array() = 0;
   }
 
+  inline Metrics() : Metrics(0u) {} // For MSVC. std::future<Metrics>
+
   inline void merge(const Metrics &other) {
     hit += other.hit;
     recall += other.recall;
@@ -34,7 +38,12 @@ struct Metrics {
     precision += other.precision;
     map += other.map;
   }
-
+  inline void increment_item_cnt(size_t item_index) {
+    if (item_index >= this->n_item) {
+      throw std::runtime_error("");
+    }
+    item_cnt(item_index) += 1;
+  }
   std::map<std::string, double> as_dict() const {
     std::map<std::string, double> result;
     CountVector count_local(item_cnt);
@@ -78,6 +87,8 @@ struct Metrics {
   double ndcg = 0;
   double precision = 0;
   double map = 0;
+
+private:
   size_t n_item;
   CountVector item_cnt;
 };
@@ -154,7 +165,7 @@ private:
                   return buffer[begin_ptr + i1] > buffer[begin_ptr + i2];
                 });
       for (size_t i = 0; i < cutoff; i++) {
-        metrics.item_cnt(index[i]) += 1;
+        metrics.increment_item_cnt(index[i]);
       }
       size_t n_gt = X_.outerIndexPtr()[u_orig + 1] - X_.outerIndexPtr()[u_orig];
       if (n_gt == 0) {
